@@ -1,0 +1,1015 @@
+<!doctype html>
+<!--
+  Chord Timing Tester (동시치기 측정기) Ver.1.0.0-beta.1
+  ==================================================
+  여러 버튼을 동시에 눌렀을 때 첫 입력과 마지막 입력의 간격(ms)을 측정하는 단일 HTML 도구.
+  외부 서버나 빌드 과정 없이 이 파일 하나로 동작한다. (Google Fonts만 외부에서 불러오며, 없으면 기본 글꼴 사용)
+
+  [파일 이름]
+  - chord-timing-tester.html (웹 관례대로 소문자+하이픈. 예전 작업용 이름 chord-timing-lab.html에서 변경)
+
+  [버전 규칙]
+  - 유의적 버전(주.부.수). 호환 안 되는 큰 변화=주, 새 기능=부, 버그 수정·문구 다듬기=수.
+  - 1.0.0 정식 전까지는 베타 표기: Ver.1.0.0-beta.1 → beta.2 → ... (필요하면 rc.1을 거쳐) → Ver.1.0.0.
+  - 표기는 'Ver.' 접두어 사용(리듬 게임 이용자에게 익숙한 모양). GitHub 커밋 제목도 'Ver.1.0.0-beta.1: 내용' 형식으로 통일.
+  - 저장 키(chordtiming2, chordtiming-sessions)를 바꾸면 사용자의 저장 결과가 사라지므로 바꿀 때는 주의.
+
+  [게시]
+  - GitHub 조직 chord-timing-tester의 저장소 chord-timing-tester.github.io에 index.html로 게시.
+    주소: https://chord-timing-tester.github.io
+
+  [변경 이력]
+  - 1.0.0-beta.1: 첫 게시 버전. (작업 중 0.9.1 → 0.10.0으로 부르다가, '1.0 직전의 미완성'이라는 뜻을 담아 베타 표기로 확정)
+           결과 저장·비교, 마지막 기록 삭제, 측정 진행 표시(30회), 마지막 입력 박스 요약 통계 추가.
+           결과 복사 대체 방식, 게임 컨트롤러만 연결 목록에 표시, 아날로그 트리거 인식 보정.
+           '먼저 들어간 입력' 통계 제거, 동시 입력·동시치기 차이 도움말 추가, 레이아웃 넘침 수정.
+           비교 표 열 축소(평균·편차·최대·판정 지표)와 열 너비 고정(이름 26%, 삭제 칸 고정, 나머지 균등), 값에 단위(ms) 복원, 숫자 열 가운데 정렬, 보고 간격 '뚜렷한 주기 없음'을 '1ms 이하'로 표기.
+           결과 저장 기본 이름을 항상 '측정 N'으로, 저장·복사·비교에 연결된 장치 이름 대신 실제로 쓴 입력 종류(키보드·컨트롤러) 표시.
+           Gamepad API가 막힌 화면에서 오류가 반복되던 문제 수정.
+           최근 기록의 입력 순서를 화살표(→) 대신 작은 칸으로 표시(방향키 ←→와 헷갈리지 않게).
+  - 0.9.0: 첫 정리 버전.
+
+  [입력 경로]
+  - 키보드: keydown의 event.timeStamp 사용. OS 수신 시각 기준이라 정밀함.
+  - 컨트롤러: WebHID로 리포트를 직접 받음(inputreport의 timeStamp). Chrome·Edge 전용.
+    리포트 디스크립터를 해석해 버튼 비트, 햇 스위치(방향), 아날로그 축(트리거·스틱)을 찾는다.
+    해석이 안 되는 장치는 리포트의 비트 변화를 그대로 입력으로 본다.
+    장치 선택 창에는 게임 컨트롤러 용도(Joystick·Gamepad·Multi-axis Controller)의 장치만 나오게 필터링한다.
+  - Gamepad API: 기본 꺼짐. 브라우저가 패드 상태를 주기적으로 샘플링해서 간격이 0ms 아니면
+    수~16ms로 뭉개져 측정에 부적합하다는 것을 확인함. 참고용 옵션으로만 남김.
+    HID 연결과 함께 켜면 같은 입력이 두 번 잡히므로 HID 연결 시 자동으로 끈다.
+
+  [동시치기 묶는 방식]
+  - 키 등록·개수 설정 없음. 첫 입력 후 100ms(WINDOW) 안에 들어온 입력을 한 번의 동시치기로 묶는다.
+  - 2개 이상일 때만 기록하고, 단타는 기록하지 않는다. 최대 10개(손가락 수)를 상정.
+  - 키보드가 6개까지만 표시되는 것은 키보드의 6KRO 한계이며 도구의 제한이 아님.
+
+  [판정 기준] (사용자와 논의해서 정한 내용)
+  - 격투 게임: 게임은 입력을 매 프레임(60fps 기준 16.7ms) 한 번씩 읽는다.
+    "16.7ms 안이면 동시"가 아니라 "두 입력 사이에 프레임 경계가 끼는가"가 핵심.
+    같은 프레임에 들어갈 확률 = max(0, 1 - 간격 / 16.7ms). (8ms면 약 52%)
+  - 리듬 게임: 노트는 하나하나 따로 판정된다.
+    사람은 동시치기의 가운데를 노리지 않고 "지금!" 하는 순간에 누르므로,
+    첫 입력을 정타이밍으로 보고 남은 여유 = 판정 범위 - 간격 으로 계산한다.
+    (초기에 쓰던 '가운데 기준, 범위 - 간격/2' 방식은 비현실적이라 폐기함)
+  - 리듬 게임 판정 범위 기본값은 ±22ms. 41.7ms는 너무 후해서 장치 차이가 드러나지 않음.
+    22ms는 EZ2ON REBOOT : R 스탠다드 KOOL이고 DJMAX RESPECT V 하드(±20.8ms)와 비슷함.
+  - ? 도움말에는 디맥(일반 41.7 / 하드 20.8 / 맥스 10.4)과 이지투온(베이직 40 / 스탠다드 22)만 표기.
+    커뮤니티에 알려진 값이며 공식 수치 아님.
+
+  [알려진 한계]
+  - 햇 스위치는 8방향 중 하나의 값만 표현 가능해서, SOCD Off로 좌+우를 누르면 엉뚱한 방향(예: 왼쪽 아래)으로 온다.
+    게임(XInput)에서는 방향이 개별 버튼이라 정상 인식됨. 측정하려면 키보드 모드나 방향을 버튼으로 보내는 설정 필요.
+  - XInput 컨트롤러를 HID로 읽으면 Windows가 LT/RT를 하나의 축으로 합친다(실측: LT=Z+, RT=Z-).
+    둘을 동시에 당기면 상쇄되어 가운데로 돌아가므로 LT+RT 동시 입력은 측정 불가. 다른 입력 모드나 키보드 모드로 측정해야 함.
+  - 브라우저 timeStamp는 1ms보다 잘게 나와서 값을 소수점 첫째 자리까지 표시한다.
+
+  [기능]
+  - 마지막 입력: 간격(ms), 키 개수, 프레임 환산, 판정 문장, 부가 태그(같은 타이밍·Gamepad API), 타임라인.
+    판정 색: 격투 게임은 같은 프레임 확률 80% 이상(간격 약 3.3ms 이하), 리듬 게임은 남은 여유가 판정 범위의 절반 이상이면 초록.
+    둘 다 업계 기준이 아닌 임의로 정한 값.
+  - 요약 통계: 마지막 입력 박스 아래에 기록 수·판정 지표·평균 간격·최대 표시(스크롤 없이 확인용).
+  - 측정 진행 표시: 30회를 목표로 진행 막대와 남은 횟수를 보여준다.
+  - 추정 보고 간격: 0이 아닌 간격이 10회 이상일 때, 16·8·4·2ms 배수에 85% 이상 몰리면 그 값을 보고 간격으로 추정.
+    계단이 없으면(1ms 이하 장치) '1ms 이하'로 표시.
+  - 마지막 기록 삭제: 실수로 눌린 한 번만 취소.
+  - 결과 복사: Clipboard API → execCommand('copy') → 실패 시 직접 복사용 텍스트 상자 표시.
+    Claude 화면 안 등 권한이 막힌 환경에서 자동 복사가 실패하는 문제 대응.
+  - 결과 저장 기본 이름은 '측정 N'. 장치 이름은 연결만 되어 있어도 붙어서 헷갈리므로 쓰지 않는다.
+    대신 기록에 실제로 쓰인 입력 종류(키보드·컨트롤러·Gamepad API)를 저장·복사·비교 표에 표시.
+  - 결과 저장·비교: 측정값 원본(간격, 키 개수)을 localStorage 'chordtiming-sessions'에 이름·날짜와 함께 저장.
+    비교 표 열은 이름·기록·평균·편차·최대·판정 지표·삭제. 판정 지표는 지금 선택한 판정 기준으로 다시 계산.
+    숫자와 열 제목은 오른쪽 정렬. '칸 가운데의 고정 폭 상자 안에서 오른쪽 정렬' 방식은 시도했으나 더 틀어져 보여서 되돌림.
+    제목이 숫자보다 길면 오른쪽 정렬에서 제목만 왼쪽으로 튀어나와 '새 부리' 모양이 되는 문제가 있음(특히 리듬 게임).
+    '긴 제목 두 줄 처리 + 오른쪽 여백 확대'도 시도했으나 어색해서 되돌림.
+    값에 단위(ms, %)를 다시 붙여 숫자 길이를 제목과 비슷하게 맞춤. (공간 절약을 위해 뺐던 ms를 복원)
+    숫자 열과 제목은 가운데 정렬로 유지하기로 함(이름 열은 왼쪽 정렬).
+    값 길이가 조금씩 달라 단위 위치가 행마다 살짝 어긋나는 아쉬움은 있지만, 오른쪽 정렬보다 낫다고 판단.
+    '판정 안'은 % 값과 길이가 비슷해서 용어 유지(성공률 등으로 바꾸지 않기로 함).
+    항목별 가장 좋은 값은 굵게 표시. 열 너비는 고정(이름 26%, 삭제 칸 58px, 나머지 균등)이라 저장 결과 유무와 상관없이 같다.
+  - 설정(게임 유형, 판정 범위, Gamepad API 사용 여부)은 localStorage 'chordtiming2'에 저장.
+  - 아날로그 축: X·Y·Z·Rx·Ry·Rz·슬라이더·다이얼·휠·러더·스로틀·가속·브레이크를 인식.
+    연결 후 첫 리포트 값을 쉬는 위치로 삼아 트리거(한쪽 끝)와 스틱(가운데)을 구분.
+    50% 이상에서 눌림, 40% 아래에서 뗌(떨림 방지). 디스크립터 최대값이 음수로 읽히면 0~2^비트수-1로 보정.
+  - Gamepad API가 권한 정책으로 막힌 화면(Claude 안 등)에서는 getGamepads가 오류를 던진다.
+    1ms마다 반복되는 오류로 화면에 빨간 오류가 뜨지 않게, 오류가 나면 옵션을 끄고 안내 문구를 표시.
+  - 키보드와 Gamepad API 입력이 한 동시치기에 섞이면 시간 기준이 달라서, 둘 다 페이지가 받은 시각으로 계산한다.
+
+  [표현·UI 방침]
+  - 특정 제품명 대신 "게임패드·아케이드 스틱·올버튼 컨트롤러" 같은 일반 표현을 쓴다.
+  - 용어: "동시치기"는 붙여 쓰고 "동시 입력"은 띄어 쓴다. 영어 이름은 Chord Timing Tester.
+  - '지금 눌린 입력 (동시 입력)' 제목의 ? 도움말에서 동시 입력(인식 개수)과 동시치기(타이밍 간격)의 차이를 설명.
+    문장은 줄을 억지로 나누지 않고 칸 너비에 맞춰 자연스럽게 줄바꿈되게 둔다.
+  - 입력 순서는 화살표로 잇지 않는다(방향키 표기 ←↑→↓와 겹침). 들어온 순서대로 작은 칸을 왼쪽부터 나열.
+  - Gamepad API 버튼 이름은 Xbox(XInput) 표기만 사용. HID는 장치 번호 그대로 "버튼 N".
+  - 장치가 하나일 때는 입력 이름 앞에 장치 번호를 붙이지 않는다. 컨트롤러 번호는 빈 번호를 재사용.
+  - 컨트롤러 연결 목록에는 Joystick·Gamepad·Multi-axis Controller 용도의 HID 장치만 표시(키보드·마우스 등 제외).
+    장치 이름 아래 입력 구성(버튼·축 개수) 표시는 불필요해서 뺐다.
+  - 화면이 흔들리지 않도록: 지금 눌린 입력은 10칸 고정 슬롯, 마지막 입력 박스·타임라인·요약 통계는 높이 고정,
+    판정 문장은 한 줄(넘치면 말줄임), 부가 정보는 작은 태그로. 박스가 내용물 때문에 넓어지지 않게 최소 너비 0.
+  - Tab 키도 측정용 키로 쓰므로 Tab 항목 이동은 막는다. 마우스 클릭이나 키 입력 시 포커스를 풀어 테두리가 생기지 않게 한다.
+  - 사용자와 논의 끝에 뺀 것: 키 등록 방식, 동시 입력 개수 설정, 실패 처리 시간 설정, 판정 범위 프리셋 버튼,
+    '먼저 들어간 입력' 통계(손가락 습관에 좌우되어 장치 평가에 부적합), 비교 표의 중앙값 열.
+
+  [보류한 아이디어] (제안했지만 아직 하지 않은 것)
+  - 키별 평균 지연: 각 키가 첫 입력보다 평균 몇 ms 늦는지 표시. 특정 키만 늦는 장치를 찾는 데 유용.
+  - 떼는 타이밍 측정: 롱노트처럼 동시에 뗄 때의 간격.
+  - 판정 색을 초록·노랑·빨강 3단계로 세분화.
+  - 영어 화면 추가.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chord Timing Tester · 동시치기 측정기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E8ECF3; --panel:#F8FAFD; --ink:#18202F; --muted:#5B6680; --line:#CAD2E0; --soft:#DDE3EE;
+  --a:#2F6FEB; --b:#D6336C; --c:#1A9473; --d:#B97E00;
+  --ok:#1A9473; --bad:#C2413A; --band:rgba(47,111,235,.07); --win:rgba(26,148,115,.14);
+  --display:"Chakra Petch","IBM Plex Sans KR",system-ui,sans-serif;
+  --body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121722; --panel:#1A2030; --ink:#E4E8F1; --muted:#97A1B7; --line:#2C3447; --soft:#242B3C;
+    --a:#6E9DFF; --b:#FF6E9C; --c:#3DCDA1; --d:#F0B53C;
+    --ok:#3DCDA1; --bad:#FF7A70; --band:rgba(110,157,255,.09); --win:rgba(61,205,161,.16);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121722; --panel:#1A2030; --ink:#E4E8F1; --muted:#97A1B7; --line:#2C3447; --soft:#242B3C;
+  --a:#6E9DFF; --b:#FF6E9C; --c:#3DCDA1; --d:#F0B53C;
+  --ok:#3DCDA1; --bad:#FF7A70; --band:rgba(110,157,255,.09); --win:rgba(61,205,161,.16);
+  color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 48px}
+header{margin-bottom:22px}
+.brand{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(1.7rem,4vw,2.4rem);letter-spacing:-.01em;margin:0;line-height:1.1}
+.ver{font-family:var(--display);font-size:.8rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+.ko{font-family:var(--display);font-weight:600;font-size:1.1rem;color:var(--muted)}
+header p{margin:8px 0 0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
+section{min-width:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+h2{font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0 0 12px}
+.hint{color:var(--muted);font-size:.88rem;margin:6px 0 0}
+button{font:inherit;font-weight:500;color:var(--ink);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:default}
+button.primary,button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button.small{padding:2px 8px;font-size:.82rem}
+button:focus-visible,input:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+input[type=number]{font:inherit;font-family:var(--display);width:84px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.seg{display:inline-flex;flex-wrap:wrap}
+.seg button{border-radius:0;margin-left:-1px}
+.seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+.seg button:last-child{border-radius:0 6px 6px 0}
+
+.big{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.num{font-family:var(--display);font-weight:700;font-size:clamp(3.2rem,11vw,5.6rem);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.unit{font-family:var(--display);font-size:1.4rem;color:var(--muted)}
+.verdict{font-weight:600;margin-top:6px;height:1.55em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#readout{min-height:150px}
+.side{display:flex;flex-direction:column;margin-left:4px;font-family:var(--display);font-size:1rem;line-height:1.35;color:var(--muted)}
+.side b{color:var(--ink)}
+.tags{display:flex;gap:6px;height:24px;margin-top:6px;overflow:hidden}
+.tag{font-size:.78rem;padding:2px 8px;border-radius:4px;background:var(--soft);color:var(--muted);white-space:nowrap}
+.verdict.ok{color:var(--ok)} .verdict.bad{color:var(--bad)}
+.flash{animation:flash .35s ease-out}
+@keyframes flash{from{opacity:.35;transform:translateY(3px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}}
+.strip{margin-top:14px;overflow-x:auto}
+.strip svg{display:block;width:100%;min-width:420px;height:auto}
+.mini{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 12px;margin:12px 0 0;padding-top:12px;border-top:1px solid var(--soft)}
+.mini dd{font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:520px){.mini{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.idle{color:var(--muted);font-size:1.1rem;margin:4px 0}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;min-height:32px;align-items:center}
+#held{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;min-height:0}
+.slot{height:30px;border:1.5px dashed var(--line);border-radius:5px;display:flex;align-items:center;justify-content:center;padding:0 6px;font-family:var(--display);font-weight:600;font-size:.85rem;min-width:0}
+.slot.on{background:var(--ink);color:var(--panel);border:1.5px solid var(--ink)}
+.slot span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#heldCount{display:inline-block;min-width:3ch}
+.chip{font-family:var(--display);font-weight:600;font-size:.92rem;padding:4px 10px;border-radius:5px;border:1.5px solid currentColor;background:transparent}
+.chip.held{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.empty{color:var(--muted);font-size:.9rem}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.field{display:grid;gap:6px;margin-top:16px}
+.field label,.field .lbl{font-weight:500;font-size:.92rem}
+.tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--muted);color:var(--muted);font-family:var(--display);font-weight:700;font-size:.8rem;cursor:help;flex:none}
+.tip:hover,.tip:focus{color:var(--ink);border-color:var(--ink);outline:none}
+.tip .pop{display:none;position:absolute;left:-8px;top:calc(100% + 8px);z-index:10;width:max-content;max-width:min(320px,82vw);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.18);font-family:var(--body);font-weight:400;font-size:.85rem;line-height:1.5;cursor:default}
+.tip:hover .pop,.tip:focus .pop,.tip:focus-within .pop{display:block}
+.tip table{border-collapse:collapse;margin:6px 0}
+.tip td{padding:2px 0}
+.tip td+td{padding-left:14px;font-family:var(--display);font-weight:600;text-align:right;white-space:nowrap}
+.tip small{color:var(--muted)}
+.devs{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;font-size:.9rem}
+.devs li{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.devs li span::before{content:"● ";color:var(--ok)}
+.msg{font-size:.88rem;margin-top:8px;color:var(--bad)}
+input[type=text]{font:inherit;flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.progress{height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.progress div{height:100%;width:0;background:var(--a);transition:width .2s}
+.progress div.done{background:var(--ok)}
+@media (prefers-reduced-motion:reduce){.progress div{transition:none}}
+.tablewrap{overflow-x:auto}
+table.cmp{width:100%;min-width:520px;table-layout:fixed;border-collapse:collapse;font-size:.88rem;font-variant-numeric:tabular-nums}
+table.cmp td,table.cmp th{white-space:nowrap}
+table.cmp td:first-child{white-space:normal;word-break:keep-all}
+table.cmp td,table.cmp th{overflow:hidden;text-overflow:ellipsis}
+table.cmp td:last-child{padding-right:0}
+table.cmp th{text-align:center;font-weight:500;color:var(--muted);font-size:.8rem;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.cmp td{text-align:center;padding:7px 8px;border-bottom:1px solid var(--soft);font-family:var(--display)}
+table.cmp th:first-child,table.cmp td:first-child{text-align:left;font-family:var(--body)}
+table.cmp td.best{font-weight:700;color:var(--ok)}
+table.cmp tr.cur td{background:var(--band)}
+table.cmp .sub{display:block;font-size:.75rem;color:var(--muted)}
+#copyText{width:100%;margin-top:6px;font:inherit;font-size:.85rem;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);resize:vertical}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:.9rem;margin-top:12px}
+.check input{margin-top:4px}
+
+dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin:0}
+dl div{min-width:0}
+dt{color:var(--muted);font-size:.82rem}
+dd{margin:0;font-family:var(--display);font-weight:600;font-size:1.25rem;font-variant-numeric:tabular-nums}
+dd small{font-family:var(--body);font-weight:400;font-size:.8rem;color:var(--muted)}
+dl .wide{grid-column:1/-1}
+dl .wide dd{font-size:1rem}
+dl .key dd{font-size:1.6rem}
+
+.hist{position:relative;height:150px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid var(--line);padding-top:8px}
+.bar{flex:1;background:var(--a);border-radius:2px 2px 0 0;opacity:.85}
+.bar.out{background:var(--muted);opacity:.5}
+.thr{position:absolute;top:0;bottom:0;border-left:2px dashed var(--ok)}
+.thr span{position:absolute;top:0;left:4px;font-size:.75rem;color:var(--ok);white-space:nowrap;font-weight:600}
+.axis{display:flex;justify-content:space-between;font-family:var(--display);font-size:.75rem;color:var(--muted);margin-top:4px}
+
+ol.recent{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-variant-numeric:tabular-nums}
+ol.recent li{display:grid;grid-template-columns:3.2em 5.5em 2.6em minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid var(--soft);font-size:.9rem}
+ol.recent .n{color:var(--muted);font-family:var(--display)}
+ol.recent .g{font-family:var(--display);font-weight:600}
+.seq{display:flex;gap:4px;min-width:0;overflow:hidden}
+.seq i{font-style:normal;font-family:var(--display);font-size:.8rem;padding:0 6px;border:1px solid var(--line);border-radius:4px;white-space:nowrap}
+ol.recent .k{color:var(--muted);font-family:var(--display)}
+.banner{display:none;background:var(--d);color:#1b1400;font-weight:600;padding:8px 14px;border-radius:8px;margin-bottom:14px}
+.banner.show{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>Chord Timing Tester</h1><span class="ko">동시치기 측정기</span><span class="ver">Ver.1.0.0-beta.1</span></div>
+    <p>여러 버튼을 동시에 눌렀을 때 첫 입력과 마지막 입력이 얼마나 차이 나게 들어오는지 잽니다.<br>키보드는 바로, 게임패드·아케이드 스틱·올버튼 컨트롤러는 HID로 연결해서 정밀하게 측정합니다.</p>
+  </header>
+
+  <div class="banner" id="focusBanner">페이지 밖에 포커스가 있습니다. 측정하려면 이 페이지를 한 번 클릭하세요.</div>
+
+  <div class="grid">
+    <div class="col">
+      <section aria-live="polite">
+        <h2>마지막 입력</h2>
+        <div id="readout"></div>
+        <div class="strip" id="strip"></div>
+        <dl class="mini" id="mini"></dl>
+      </section>
+
+      <section>
+        <h2>간격 분포</h2>
+        <div class="hist" id="hist"></div>
+        <div class="axis"><span>0ms</span><span>10</span><span>20</span><span>30</span><span>40ms+</span></div>
+        <p class="hint">입력 장치는 눌린 상태를 일정한 간격으로 PC에 보고합니다. 이 보고 간격이 길면 측정값이 0ms, 8ms, 16ms처럼 계단식으로만 나오고 그 사이는 비게 됩니다. 막대가 이렇게 띄엄띄엄 몰려 있다면 그 간격이 장치의 보고 간격입니다.</p>
+      </section>
+
+      <section>
+        <h2>최근 기록</h2>
+        <ol class="recent" id="recent"></ol>
+      </section>
+
+      <section>
+        <h2>저장한 결과 비교</h2>
+        <div class="tablewrap" id="compare"></div>
+        <p class="hint">편차는 표준편차, 여유와 판정 안은 지금 선택한 판정 기준으로 다시 계산한 값이며, 가장 좋은 값은 굵게 표시됩니다.</p>
+      </section>
+    </div>
+
+    <div class="col">
+      <section>
+        <h2>판정 기준</h2>
+        <div class="seg" role="group" aria-label="게임 유형">
+          <button id="typeFight">격투 게임</button><button id="typeRhythm">리듬 게임</button>
+        </div>
+        <div id="fightBox" class="field">
+          <span class="hint" style="margin:0">격투 게임은 입력을 매 프레임(60fps 기준 16.7ms) 한 번씩 읽습니다. 두 입력 사이에 프레임 경계가 끼면 따로 들어간 것으로 처리되므로, 간격을 기준으로 <b>같은 프레임에 들어갈 확률</b>을 계산합니다. 간격 8ms면 약 52%, 2ms면 약 88%입니다.</span>
+        </div>
+        <div id="rhythmBox" class="field" hidden>
+          <div class="row" style="gap:6px">
+            <label for="judgeW">판정 범위 (노트 기준 ±ms)</label>
+            <span class="tip" aria-label="알려진 게임의 판정 범위">?
+              <span class="pop" role="tooltip">
+                <b>알려진 게임의 최고 판정 범위</b>
+                <table>
+                  <tr><td>DJMAX RESPECT V 일반</td><td>±41.7ms</td></tr>
+                  <tr><td>DJMAX RESPECT V 하드</td><td>±20.8ms</td></tr>
+                  <tr><td>DJMAX RESPECT V 맥스</td><td>±10.4ms</td></tr>
+                  <tr><td>EZ2ON REBOOT : R 베이직</td><td>±40.0ms</td></tr>
+                  <tr><td>EZ2ON REBOOT : R 스탠다드</td><td>±22.0ms</td></tr>
+                </table>
+                <small>커뮤니티에 알려진 값이며, 버전에 따라 다를 수 있습니다.</small>
+              </span>
+            </span>
+          </div>
+          <input type="number" id="judgeW" min="1" max="200" step="0.1">
+          <span class="hint" style="margin:0">노트는 하나하나 따로 판정됩니다. 첫 입력을 정확한 타이밍에 눌렀다고 보고, 나중에 들어온 입력이 늦은 쪽 판정 범위를 얼마나 써버리는지 계산합니다. 간격이 판정 범위를 넘으면 첫 입력이 정확해도 마지막 입력은 판정 밖으로 나갑니다.</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>컨트롤러 연결</h2>
+        <div class="row"><button id="hidBtn" class="primary">컨트롤러 연결</button></div>
+        <ul class="devs" id="devs"></ul>
+        <div class="msg" id="hidMsg" hidden></div>
+        <p class="hint">Chrome·Edge에서 동작합니다. 목록에 컨트롤러가 보이지 않으면 컨트롤러의 입력 모드를 바꿔 보세요. 키보드는 연결 없이 바로 측정됩니다.</p>
+        <label class="check"><input type="checkbox" id="gpApi"> <span>Gamepad API로도 읽기 (정밀도 낮음, 위에서 연결한 컨트롤러와 함께 켜면 입력이 두 번 잡힙니다)</span></label>
+      </section>
+
+
+
+      <section>
+        <h2 class="row" style="gap:8px">지금 눌린 입력 (동시 입력)
+          <span class="tip" aria-label="동시 입력과 동시치기의 차이">?
+            <span class="pop" role="tooltip">
+              <b>동시 입력</b><br>여러 키를 함께 눌렀을 때 몇 개까지 인식되는지를 말합니다. 이 박스에서 확인할 수 있습니다.<br><br>
+              <b>동시치기</b><br>함께 누른 키들이 얼마나 같은 타이밍에 들어오는지를 말합니다. 이 측정기에서 재는 값입니다.<br><br>
+              인식되는 개수가 충분해도 타이밍이 벌어지면, 격투 게임에서는 커맨드가 갈라지고 리듬 게임에서는 판정이 밀릴 수 있습니다.
+            </span>
+          </span>
+          <span id="heldCount" style="color:var(--muted);font-weight:500"></span></h2>
+        <div class="chips" id="held"></div>
+        <p class="hint">첫 입력 후 100ms 안에 들어온 입력을 한 번의 동시치기로 묶습니다. 2개부터 10개까지 자동으로 인식하니, 실제로 쓰는 키 배치 그대로 눌러 보세요. 누른 개수보다 적게 표시된다면 장치의 동시 입력 한계입니다.</p>
+      </section>
+
+      <section>
+        <h2>통계</h2>
+        <div class="progress" aria-hidden="true"><div id="progBar"></div></div>
+        <p class="hint" id="progText" style="margin:6px 0 14px"></p>
+        <dl id="stats"></dl>
+        <div class="row" style="margin-top:16px">
+          <button id="undoBtn">마지막 기록 삭제</button>
+          <button id="copyBtn">결과 복사</button>
+          <button id="resetBtn">기록 초기화</button>
+        </div>
+        <div class="field">
+          <label for="saveName">결과 저장</label>
+          <div class="row">
+            <input type="text" id="saveName" maxlength="40" placeholder="이름 (예: 사무용 키보드)">
+            <button id="saveBtn" class="primary">저장</button>
+          </div>
+          <span class="hint" id="saveMsg" style="margin:0">저장한 결과는 이 브라우저에 보관되며, 왼쪽 ‘저장한 결과 비교’에서 나란히 볼 수 있습니다.</span>
+        </div>
+        <div id="copyBox" hidden>
+          <p class="hint">이 화면에서는 자동 복사가 막혀 있습니다. 아래 텍스트가 선택된 상태에서 Ctrl+C를 눌러 복사하세요.</p>
+          <textarea id="copyText" readonly rows="8"></textarea>
+        </div>
+        <p class="hint">값은 소수점 첫째 자리까지 표시합니다. 컨트롤러는 보통 1ms 간격으로 입력을 보내지만, 브라우저가 기록하는 도착 시각은 그보다 잘게 나와서 3.2ms 같은 값이 생깁니다.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FRAME = 1000 / 60;
+  const WINDOW = 100;   // 첫 입력 후 이 시간 안에 들어온 입력을 한 번의 동시치기로 묶는다
+  const COLORS = ['var(--a)', 'var(--b)', 'var(--c)', 'var(--d)'];
+  const PAD_NAMES = ['A','B','X','Y','LB','RB','LT','RT','View','Menu','LS','RS','↑','↓','←','→','Guide'];
+  const HAT = ['u','ur','r','dr','d','dl','l','ul'];
+  const $ = id => document.getElementById(id);
+
+  let gameType = 'fight', rhythmW = 22, useGamepadApi = false;
+  let active = null;
+  const attempts = [], held = new Map(), labels = {};
+  const padPrev = {}, hidDevs = [];
+
+  // 판정 계산
+  const frameProb = gap => Math.max(0, 1 - gap / FRAME);   // 같은 프레임에 들어갈 확률
+  const margin = gap => rhythmW - gap;                       // 첫 입력을 정타이밍으로 볼 때 남는 늦은 쪽 여유
+  // 초록색 기준(임의로 정한 값): 격투 게임은 같은 프레임 확률 80% 이상, 리듬 게임은 판정 범위의 절반 이상 여유
+  const isGood = gap => gameType === 'fight' ? frameProb(gap) >= 0.8 : margin(gap) >= rhythmW / 2;
+
+  // ---------- 저장 ----------
+  function save() {
+    try { localStorage.setItem('chordtiming2', JSON.stringify({ gameType, rhythmW, useGamepadApi })); } catch (e) {}
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem('chordtiming2') || 'null');
+      if (!s) return;
+      if (s.gameType === 'fight' || s.gameType === 'rhythm') gameType = s.gameType;
+      if (s.rhythmW > 0) rhythmW = s.rhythmW;
+      useGamepadApi = !!s.useGamepadApi;
+    } catch (e) {}
+  }
+
+  // ---------- 라벨 ----------
+  const KEYMAP = { Space:'Space', ArrowLeft:'←', ArrowRight:'→', ArrowUp:'↑', ArrowDown:'↓',
+    ShiftLeft:'L Shift', ShiftRight:'R Shift', ControlLeft:'L Ctrl', ControlRight:'R Ctrl',
+    AltLeft:'L Alt', AltRight:'R Alt', Semicolon:';', Quote:"'", Comma:',', Period:'.', Slash:'/',
+    BracketLeft:'[', BracketRight:']', Backslash:'\\', Minus:'-', Equal:'=', Backquote:'`', Enter:'Enter', Tab:'Tab' };
+  function keyLabel(code) {
+    if (KEYMAP[code]) return KEYMAP[code];
+    if (code.startsWith('Key')) return code.slice(3);
+    if (code.startsWith('Digit')) return code.slice(5);
+    if (code.startsWith('Numpad')) return 'Num ' + code.slice(6);
+    return code;
+  }
+  const padLabel = (p, i) => {
+    const name = p.mapping === 'standard' && PAD_NAMES[i] ? PAD_NAMES[i] : '버튼 ' + i;
+    return Object.keys(padPrev).length > 1 ? `패드${p.index + 1} ${name}` : name;
+  };
+  const AXIS_NAMES = { 0x30:'X', 0x31:'Y', 0x32:'Z', 0x33:'Rx', 0x34:'Ry', 0x35:'Rz', 0x36:'슬라이더', 0x37:'다이얼', 0x38:'휠', 0xBA:'러더', 0xBB:'스로틀', 0xC4:'가속', 0xC5:'브레이크' };
+
+  // ---------- 동시치기 묶기 ----------
+  function press(id, src, label, kind) {
+    labels[id] = label;
+    held.set(id, label); renderHeld();
+    if (!active) active = { presses: new Map(), timer: setTimeout(finish, WINDOW) };
+    if (!active.presses.has(id)) active.presses.set(id, { src, recv: performance.now(), kind });
+  }
+  function release(id) { if (held.delete(id)) renderHeld(); }
+  function finish() {
+    const a = active; active = null;
+    if (!a || a.presses.size < 2) return;           // 단타는 기록하지 않는다
+    const entries = [...a.presses.entries()];
+    // Gamepad API 시각은 기준이 달라서, 다른 입력과 섞이면 둘 다 페이지가 받은 시각(recv)으로 계산한다
+    const mixed = new Set(entries.map(([, v]) => v.kind === 'g' ? 'g' : 'p')).size > 1;
+    const times = entries.map(([id, v]) => ({ id, t: mixed ? v.recv : v.src })).sort((x, y) => x.t - y.t);
+    const t0 = times[0].t, gap = times[times.length - 1].t - t0;
+    attempts.push({ gap, count: times.length, kinds: [...new Set(entries.map(([, v]) => v.kind))], offsets: times.map(x => ({ id: x.id, dt: x.t - t0 })), approx: entries.some(([, v]) => v.kind === 'g') });
+    renderAll(true);
+  }
+
+  // ---------- 키보드 ----------
+  const isTyping = e => e.target && ((e.target.tagName === 'INPUT' && ['number', 'text'].includes(e.target.type)) || e.target.tagName === 'TEXTAREA');
+  // 측정 중 브라우저 기본 동작(스크롤, Tab 이동 등)을 막되, Ctrl·Cmd 조합과 F키는 그대로 둔다
+  const keepDefault = e => e.ctrlKey || e.metaKey || /^F\d+$/.test(e.code);
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b && e.detail > 0) b.blur();
+  });
+  window.addEventListener('keydown', e => {
+    if (isTyping(e)) return;
+    const ae = document.activeElement;
+    if (ae && ae !== document.body) ae.blur();
+    if (!keepDefault(e)) e.preventDefault();
+    if (e.repeat) return;
+    press('k:' + e.code, e.timeStamp, keyLabel(e.code), 'k');
+  });
+  window.addEventListener('keyup', e => {
+    if (isTyping(e)) return;
+    if (!keepDefault(e)) e.preventDefault();
+    release('k:' + e.code);
+  });
+  window.addEventListener('blur', () => { held.clear(); renderHeld(); $('focusBanner').classList.add('show'); });
+  window.addEventListener('focus', () => $('focusBanner').classList.remove('show'));
+
+  // ---------- 컨트롤러 (WebHID) ----------
+  const hidSupported = 'hid' in navigator;
+  // 게임 컨트롤러 계열 장치만 고른다: Generic Desktop 페이지의 Joystick(0x04), Gamepad(0x05), Multi-axis Controller(0x08)
+  const PAD_USAGES = [0x04, 0x05, 0x08];
+  const PAD_FILTERS = PAD_USAGES.map(usage => ({ usagePage: 0x01, usage }));
+  const isPad = d => (d.collections || []).some(c => c.usagePage === 0x01 && PAD_USAGES.includes(c.usage));
+  function hidMsg(t) { const m = $('hidMsg'); m.hidden = !t; m.textContent = t || ''; }
+
+  function getBits(dv, off, size) {
+    let v = 0;
+    for (let k = 0; k < size; k++) {
+      const bo = off + k, byte = bo >> 3;
+      if (byte >= dv.byteLength) return 0;
+      v |= ((dv.getUint8(byte) >> (bo & 7)) & 1) << k;
+    }
+    return v;
+  }
+  // 리포트 디스크립터에서 버튼 비트와 방향(햇) 스위치 위치를 찾는다
+  function buildMap(device) {
+    const map = {};
+    const walk = col => {
+      for (const r of col.inputReports || []) {
+        let off = 0; const btn = [], hats = [], axes = [];
+        for (const it of r.items || []) {
+          const size = it.reportSize, cnt = it.reportCount;
+          const u0 = it.isRange ? it.usageMinimum : (it.usages && it.usages[0]);
+          if (!it.isConstant && u0 != null) {
+            const page = u0 >>> 16, uid = u0 & 0xffff;
+            if (page === 0x09 && size === 1) {
+              for (let k = 0; k < cnt; k++) {
+                const u = it.isRange ? it.usageMinimum + k : (it.usages[k] ?? it.usages[it.usages.length - 1]);
+                btn.push({ bit: off + k, n: u & 0xffff });
+              }
+            } else if (page === 0x01 && uid === 0x39) {
+              hats.push({ bit: off, size, min: it.logicalMinimum, max: it.logicalMaximum });
+            } else if (size > 1 && !it.isArray) {
+              for (let k = 0; k < cnt; k++) {
+                const u = it.isRange ? it.usageMinimum + k : (it.usages[k] ?? it.usages[it.usages.length - 1]);
+                const up = u >>> 16, ui = u & 0xffff;
+                if ((up === 0x01 && ui >= 0x30 && ui <= 0x38) || (up === 0x02 && [0xBA, 0xBB, 0xC4, 0xC5].includes(ui))) {
+                  let min = it.logicalMinimum, max = it.logicalMaximum;
+                  // 디스크립터가 최대값(예: 255, 65535)을 부호 있는 값으로 기록해 -1처럼 읽히는 경우가 많아 보정한다
+                  if (max <= min) { min = 0; max = 2 ** size - 1; }
+                  axes.push({ bit: off + k * size, size, min, max, name: AXIS_NAMES[ui] });
+                }
+              }
+            }
+          }
+          off += size * cnt;
+        }
+        if (btn.length || hats.length || axes.length) map[r.reportId] = { btn, hats, axes };
+      }
+      (col.children || []).forEach(walk);
+    };
+    (device.collections || []).forEach(walk);
+    return map;
+  }
+  // HID 입력 하나의 눌림/뗌 변화를 감지해 press/release로 넘긴다
+  function hidState(h, key, on, t, label) {
+    const id = `h${h.idx}:${key}`, was = !!h.prev[key];
+    if (on && !was) press(id, t, label, 'h');
+    else if (!on && was) release(id);
+    h.prev[key] = on;
+  }
+  function onReport(h, e) {
+    const t = e.timeStamp, dv = e.data, rid = e.reportId, pre = hidDevs.length > 1 ? `컨트롤러${h.idx} ` : '';
+    if (h.mapped) {
+      const m = h.map[rid];
+      if (!m) return;
+      for (const b of m.btn) hidState(h, `${rid}b${b.bit}`, getBits(dv, b.bit, 1) === 1, t, `${pre}버튼 ${b.n}`);
+      m.axes.forEach((ax, ai) => {
+        let v = getBits(dv, ax.bit, ax.size);
+        if (ax.min < 0 && v >= 2 ** (ax.size - 1)) v -= 2 ** ax.size;      // 부호 있는 값
+        const span = ax.max - ax.min;
+        if (span <= 0) return;
+        if (ax.rest === undefined) {                                       // 첫 리포트에서 쉬는 위치를 정한다
+          ax.rest = v;
+          const r = (v - ax.min) / span;
+          ax.kind = r < 0.15 ? 'low' : r > 0.85 ? 'high' : 'center';
+        }
+        const k1 = `${rid}a${ai}`, k2 = `${rid}a${ai}n`;
+        const on = (key, frac) => frac > 0.5 || (h.prev[key] && frac > 0.4);   // 50%에서 눌림, 40% 아래로 떨어지면 뗌
+        if (ax.kind === 'low') hidState(h, k1, on(k1, (v - ax.min) / span), t, `${pre}트리거 ${ax.name}`);
+        else if (ax.kind === 'high') hidState(h, k1, on(k1, (ax.max - v) / span), t, `${pre}트리거 ${ax.name}`);
+        else {
+          hidState(h, k1, on(k1, ax.max > ax.rest ? (v - ax.rest) / (ax.max - ax.rest) : 0), t, `${pre}축 ${ax.name}+`);
+          hidState(h, k2, on(k2, ax.rest > ax.min ? (ax.rest - v) / (ax.rest - ax.min) : 0), t, `${pre}축 ${ax.name}−`);
+        }
+      });
+      m.hats.forEach((ht, hi) => {
+        const v = getBits(dv, ht.bit, ht.size) - ht.min;
+        const dirs = (ht.max - ht.min === 7 && v >= 0 && v <= 7) ? HAT[v] : '';
+        [['u','↑'],['r','→'],['d','↓'],['l','←']].forEach(([d, arrow]) =>
+          hidState(h, `${rid}h${hi}${d}`, dirs.includes(d), t, `${pre}${arrow}`));
+      });
+    } else {
+      // 버튼 구조를 해석할 수 없을 때: 비트 변화를 그대로 입력으로 본다
+      const prev = h.prevBytes[rid];
+      const cur = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
+      h.prevBytes[rid] = cur;
+      if (!prev) return;
+      for (let i = 0; i < cur.length; i++) {
+        if (cur[i] === prev[i]) continue;
+        for (let b = 0; b < 8; b++) {
+          const on = (cur[i] >> b) & 1, was = (prev[i] >> b) & 1;
+          if (on !== was) hidState(h, `${rid}r${i}.${b}`, !!on, t, `${pre}비트 ${i}.${b}`);
+        }
+      }
+    }
+  }
+  async function openHid(d) {
+    if (hidDevs.some(h => h.device === d) || !isPad(d)) return;
+    try { if (!d.opened) await d.open(); }
+    catch (e) { hidMsg(`${d.productName || '장치'}를 열지 못했습니다: ${e.message}`); return; }
+    const map = buildMap(d);
+    let idx = 1; while (hidDevs.some(x => x.idx === idx)) idx++;
+    const h = { device: d, idx, map, mapped: Object.keys(map).length > 0, prev: {}, prevBytes: {} };
+    h.handler = e => onReport(h, e);
+    d.addEventListener('inputreport', h.handler);
+    hidDevs.push(h);
+    if (useGamepadApi) { useGamepadApi = false; $('gpApi').checked = false; save(); }
+    hidMsg('');
+    renderDevices();
+  }
+  function dropHid(h) {
+    h.device.removeEventListener('inputreport', h.handler);
+    for (const id of [...held.keys()]) if (id.startsWith(`h${h.idx}:`)) held.delete(id);
+    const i = hidDevs.indexOf(h);
+    if (i >= 0) hidDevs.splice(i, 1);
+    renderDevices(); renderHeld();
+  }
+  async function disconnectHid(idx) {
+    const h = hidDevs.find(x => x.idx === idx);
+    if (!h) return;
+    dropHid(h);
+    // forget()은 권한까지 해제해서 다음에 페이지를 열어도 자동으로 다시 연결되지 않게 한다
+    try { if (h.device.forget) await h.device.forget(); else await h.device.close(); } catch (e) {}
+  }
+  async function connectHid() {
+    if (!hidSupported) { hidMsg('이 브라우저는 컨트롤러 연결(WebHID)을 지원하지 않습니다. Chrome이나 Edge로 열어 주세요.'); return; }
+    try {
+      const devs = await navigator.hid.requestDevice({ filters: PAD_FILTERS });
+      for (const d of devs) await openHid(d);
+    } catch (e) {
+      hidMsg(e.name === 'SecurityError' || e.name === 'NotAllowedError'
+        ? '이 화면에서는 컨트롤러 접근이 막혀 있습니다. HTML 파일을 PC에 받아 Chrome이나 Edge로 직접 열어 주세요.'
+        : '연결하지 못했습니다: ' + e.message);
+    }
+  }
+  $('hidBtn').addEventListener('click', connectHid);
+  $('devs').addEventListener('click', e => {
+    const b = e.target.closest('[data-off]');
+    if (b) disconnectHid(+b.dataset.off);
+  });
+  if (hidSupported) {
+    try {
+      navigator.hid.getDevices().then(ds => ds.forEach(openHid)).catch(() => {});
+      navigator.hid.addEventListener('disconnect', e => {
+        const h = hidDevs.find(x => x.device === e.device);
+        if (h) dropHid(h);
+      });
+    } catch (e) {}
+  }
+
+  // ---------- Gamepad API (정밀도 낮음) ----------
+  function poll() {
+    if (!useGamepadApi || !navigator.getGamepads) return;
+    // 권한이 막힌 화면(예: Claude 안)에서는 getGamepads가 오류를 던진다. 1ms마다 오류가 쌓이지 않게 끄고 안내한다
+    let pads;
+    try { pads = navigator.getGamepads(); }
+    catch (e) {
+      useGamepadApi = false; $('gpApi').checked = false; save();
+      hidMsg('이 화면에서는 Gamepad API가 막혀 있습니다. HTML 파일을 PC에 받아 Chrome이나 Edge로 직접 열어 주세요.');
+      return;
+    }
+    for (const p of pads) {
+      if (!p) continue;
+      let prev = padPrev[p.index];
+      if (!prev) prev = padPrev[p.index] = { ts: -1, pressed: p.buttons.map(() => false) };
+      if (p.timestamp && p.timestamp === prev.ts) continue;
+      const t = p.timestamp || performance.now();
+      prev.ts = p.timestamp;
+      p.buttons.forEach((b, i) => {
+        const on = b.pressed || b.value > 0.5, id = `g${p.index}:${i}`;
+        if (on && !prev.pressed[i]) press(id, t, padLabel(p, i), 'g');
+        else if (!on && prev.pressed[i]) release(id);
+        prev.pressed[i] = on;
+      });
+    }
+  }
+  setInterval(poll, 1);
+  $('gpApi').addEventListener('change', e => { useGamepadApi = e.target.checked; save(); });
+
+  // ---------- 판정 기준 ----------
+  function setType(t) { gameType = t; save(); renderType(); renderAll(false); }
+  $('typeFight').addEventListener('click', () => setType('fight'));
+  $('typeRhythm').addEventListener('click', () => setType('rhythm'));
+  $('judgeW').addEventListener('change', e => {
+    const v = parseFloat(e.target.value);
+    if (v > 0) { rhythmW = v; save(); renderType(); renderAll(false); } else e.target.value = rhythmW.toFixed(1);
+  });
+
+  $('resetBtn').addEventListener('click', () => { attempts.length = 0; renderAll(false); });
+  $('undoBtn').addEventListener('click', () => { if (attempts.length) { attempts.pop(); renderAll(false); } });
+
+  // ---------- 결과 저장과 비교 ----------
+  const KIND_NAMES = { k: '키보드', h: '컨트롤러', g: 'Gamepad API' };
+  // 기록에 실제로 쓰인 입력 장치 종류 (연결만 되어 있고 안 쓴 장치는 표시하지 않음)
+  const sourceText = list => {
+    const set = new Set(list.flatMap(a => a.kinds || []));
+    return ['k', 'h', 'g'].filter(k => set.has(k)).map(k => KIND_NAMES[k]).join('+');
+  };
+  const SKEY = 'chordtiming-sessions';
+  let sessions = [];
+  function loadSessions() {
+    try { const v = JSON.parse(localStorage.getItem(SKEY) || '[]'); if (Array.isArray(v)) sessions = v; } catch (e) {}
+  }
+  function storeSessions() {
+    try { localStorage.setItem(SKEY, JSON.stringify(sessions)); return true; } catch (e) { return false; }
+  }
+  // 기본 이름은 항상 '측정 N'. 이미 쓴 번호 중 가장 큰 값 다음 번호를 쓴다
+  function defaultName() {
+    const nums = sessions.map(x => (/^측정 (\d+)$/.exec(x.name) || [])[1]).filter(Boolean).map(Number);
+    return `측정 ${nums.length ? Math.max(...nums) + 1 : 1}`;
+  }
+  function saveSession() {
+    if (!attempts.length) { $('saveMsg').textContent = '저장할 기록이 없습니다. 먼저 측정해 주세요.'; return; }
+    const name = $('saveName').value.trim() || defaultName();
+    sessions.push({ id: Date.now(), name, date: new Date().toISOString().slice(0, 10),
+      gaps: attempts.map(a => Math.round(a.gap * 100) / 100), counts: attempts.map(a => a.count), source: sourceText(attempts) });
+    $('saveMsg').textContent = storeSessions()
+      ? `‘${name}’(${attempts.length}회)을 저장했습니다. 다음 장치를 재려면 ‘기록 초기화’ 후 측정하세요.`
+      : '이 화면에서는 저장이 막혀 있습니다. 파일을 PC에서 직접 열어 사용해 주세요.';
+    $('saveName').value = '';
+    renderSaveName(); renderCompare();
+  }
+  $('saveBtn').addEventListener('click', saveSession);
+  $('saveName').addEventListener('keydown', e => { if (e.key === 'Enter') saveSession(); });
+  $('compare').addEventListener('click', e => {
+    const b = e.target.closest('[data-del]');
+    if (!b) return;
+    sessions = sessions.filter(x => x.id !== +b.dataset.del);
+    storeSessions(); renderSaveName(); renderCompare();
+  });
+  function renderSaveName() { $('saveName').placeholder = `이름 (비워 두면 ‘${defaultName()}’)`; }
+
+  function summarize(gaps, counts) {
+    const n = gaps.length, sorted = [...gaps].sort((a, b) => a - b), mean = avg(gaps);
+    const byCount = {};
+    counts.forEach(c => byCount[c] = (byCount[c] || 0) + 1);
+    return { n, mean, max: sorted[n - 1],
+      median: n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2,
+      sd: Math.sqrt(gaps.reduce((s, g) => s + (g - mean) ** 2, 0) / n),
+      frameP: avg(gaps.map(frameProb)), marginAvg: avg(gaps.map(margin)),
+      within: gaps.filter(g => g <= rhythmW).length / n,
+      mix: Object.keys(byCount).map(Number).sort((a, b) => a - b).map(k => `${k}키×${byCount[k]}`).join(' ') };
+  }
+  // 비교 표: '현재 측정'(저장 전)을 맨 위에, 그 아래 저장한 결과. 항목별 가장 좋은 값을 강조
+  function renderCompare() {
+    const rows = [];
+    if (attempts.length) rows.push({ name: '현재 측정', sub: `저장 안 됨 · ${sourceText(attempts)}`, cur: true, ...summarize(attempts.map(a => a.gap), attempts.map(a => a.count)) });
+    sessions.forEach(x => rows.push({ name: x.name, sub: x.source ? `${x.date} · ${x.source}` : x.date, id: x.id, ...summarize(x.gaps, x.counts) }));
+    if (!rows.length) {
+      $('compare').innerHTML = '<p class="empty" style="margin:0">저장한 결과가 없습니다. 측정 후 오른쪽 ‘결과 저장’을 누르면 여기서 장치끼리 비교할 수 있습니다.</p>';
+      return;
+    }
+    const fight = gameType === 'fight';
+    const cols = [
+      { h: '평균', v: r => r.mean, f: v => f1(v) + 'ms', low: true },
+      { h: '편차', v: r => r.sd, f: v => f1(v) + 'ms', low: true },
+      { h: '최대', v: r => r.max, f: v => f1(v) + 'ms', low: true },
+      ...(fight
+        ? [{ h: '같은 프레임', v: r => r.frameP, f: pctv }]
+        : [{ h: '평균 여유', v: r => r.marginAvg, f: v => f1(v) + 'ms' },
+           { h: '판정 안', v: r => r.within, f: pctv }])
+    ];
+    const best = cols.map(c => {
+      const vals = rows.map(c.v);
+      return rows.length > 1 ? (c.low ? Math.min(...vals) : Math.max(...vals)) : null;
+    });
+    // 열 너비 고정: 이름 26%, 삭제 칸 고정, 나머지는 균등. 저장 결과 유무나 값 길이와 상관없이 같은 너비
+    const colgroup = `<colgroup><col style="width:26%"><col>${cols.map(() => '<col>').join('')}<col style="width:58px"></colgroup>`;
+    $('compare').innerHTML = `<table class="cmp">${colgroup}<thead><tr><th>이름</th><th>기록</th>${cols.map(c => `<th>${c.h}</th>`).join('')}<th></th></tr></thead><tbody>${
+      rows.map(r => `<tr class="${r.cur ? 'cur' : ''}"><td>${esc(r.name)}<span class="sub">${esc(r.sub)} · ${r.mix}</span></td><td>${r.n}회</td>${
+        cols.map((c, i) => `<td class="${best[i] !== null && Math.abs(c.v(r) - best[i]) < 1e-9 ? 'best' : ''}">${c.f(c.v(r))}</td>`).join('')
+      }<td>${r.cur ? '' : `<button class="small" data-del="${r.id}">삭제</button>`}</td></tr>`).join('')
+    }</tbody></table>`;
+  }
+  // 복사: 1) Clipboard API → 2) 예전 방식(execCommand) → 3) 직접 복사할 수 있게 텍스트 상자 표시
+  function legacyCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+    return ok;
+  }
+  $('copyBtn').addEventListener('click', async () => {
+    const text = summaryText();
+    let ok = false;
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) {}
+    if (!ok) ok = legacyCopy(text);
+    if (ok) {
+      $('copyBox').hidden = true;
+      $('copyBtn').textContent = '복사됨';
+      setTimeout(() => $('copyBtn').textContent = '결과 복사', 1500);
+    } else {
+      $('copyText').value = text;
+      $('copyBox').hidden = false;
+      $('copyText').focus(); $('copyText').select();
+    }
+  });
+
+  // ---------- 통계 ----------
+  const avg = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+  function stats() {
+    const n = attempts.length;
+    if (!n) return { n };
+    const gaps = attempts.map(a => a.gap);
+    const sorted = [...gaps].sort((a, b) => a - b);
+    const mean = avg(gaps);
+    const sd = Math.sqrt(gaps.reduce((s, g) => s + (g - mean) ** 2, 0) / n);
+    const median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+    const byCount = {};
+    attempts.forEach(a => (byCount[a.count] = byCount[a.count] || []).push(a.gap));
+    return { n, mean, sd, median, min: sorted[0], max: sorted[n - 1],
+      frameP: avg(gaps.map(frameProb)),
+      marginAvg: avg(gaps.map(margin)), marginMin: margin(sorted[n - 1]),
+      within: gaps.filter(g => g <= rhythmW).length,
+      zero: gaps.filter(g => g < 0.5).length,
+      byCount, poll: estimatePoll(gaps), approx: attempts.some(a => a.approx) };
+  }
+  // 보고 간격 추정: 0이 아닌 간격이 큰 주기부터 그 배수에 85% 이상 몰리면 그 주기로 판단. 계단이 없으면 0(1ms 이하)
+  function estimatePoll(gaps) {
+    const nz = gaps.filter(g => g >= 0.5);
+    if (nz.length < 10) return null;
+    for (const p of [16, 8, 4, 2, 1]) {
+      const fit = nz.filter(g => { const r = g % p; return Math.min(r, p - r) <= (p >= 16 ? 1.5 : 0.35); }).length / nz.length;
+      if (fit >= 0.85) return p;
+    }
+    return 0;
+  }
+  const f1 = v => v.toFixed(1);
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '–';
+  const pctv = v => Math.round(v * 100) + '%';
+  const labelOf = id => labels[id] || id;
+  function pollText(p) {
+    if (p === null) return '측정 중 (0이 아닌 간격 10회 필요)';
+    if (p === 0 || p === 1) return '1ms 이하 (계단 없이 고르게 측정됨)';
+    return `약 ${p}ms 간격 (≈${Math.round(1000 / p)}Hz)`;
+  }
+  function verdictText(gap) {
+    if (gameType === 'fight') return `같은 프레임 확률 ${pctv(frameProb(gap))}`;
+    const m = margin(gap);
+    return m >= 0 ? `판정 ±${f1(rhythmW)}ms 중 ${f1(gap)}ms 손실 → 남은 여유 ${f1(m)}ms` : `판정 ±${f1(rhythmW)}ms를 넘어 마지막 입력은 판정 밖`;
+  }
+  const byCountText = s => Object.keys(s.byCount).map(Number).sort((a, b) => a - b)
+    .map(k => `${k}키 ${f1(avg(s.byCount[k]))}ms (${s.byCount[k].length}회)`).join(', ');
+
+  // ---------- 렌더 ----------
+  function renderType() {
+    $('typeFight').setAttribute('aria-pressed', gameType === 'fight');
+    $('typeRhythm').setAttribute('aria-pressed', gameType === 'rhythm');
+    $('fightBox').hidden = gameType !== 'fight';
+    $('rhythmBox').hidden = gameType !== 'rhythm';
+    $('judgeW').value = rhythmW.toFixed(1);
+  }
+  function renderHeld() {
+    const vals = [...held.values()];
+    const short = l => hidDevs.length <= 1 ? l.replace(/^컨트롤러\d+ /, '') : l;
+    let html = '';
+    for (let i = 0; i < 10; i++) {
+      const l = vals[i];
+      html += l ? `<div class="slot on" title="${esc(l)}"><span>${esc(short(l))}</span></div>` : '<div class="slot"></div>';
+    }
+    $('held').innerHTML = html;
+    $('heldCount').textContent = held.size ? `${held.size}개` : '';
+  }
+  function renderDevices() {
+    $('devs').innerHTML = hidDevs.map(h =>
+      `<li><span>컨트롤러${h.idx}: ${esc(h.device.productName || '이름 없는 장치')}</span><button class="small" data-off="${h.idx}">연결 해제</button></li>`).join('');
+    $('hidBtn').textContent = hidDevs.length ? '컨트롤러 추가 연결' : '컨트롤러 연결';
+  }
+  function renderReadout(flash) {
+    const el = $('readout'), last = attempts[attempts.length - 1];
+    if (!last) {
+      el.innerHTML = '<p class="idle">여러 버튼을 동시에 누르세요. 2개부터 10개까지 자동으로 인식합니다.</p>';
+      $('strip').innerHTML = stripSVG(null); return;
+    }
+    const tags = [];
+    if (last.gap < 0.5) tags.push('<span class="tag">같은 타이밍</span>');
+    if (last.approx) tags.push('<span class="tag">Gamepad API (정밀도 낮음)</span>');
+    el.innerHTML = `<div class="big ${flash ? 'flash' : ''}"><span class="num">${f1(last.gap)}</span><span class="unit">ms</span>
+        <span class="side"><b>${last.count}키</b><span>${(last.gap / FRAME).toFixed(2)}F</span></span></div>
+      <div class="verdict ${isGood(last.gap) ? 'ok' : 'bad'}">${verdictText(last.gap)}</div>
+      <div class="tags">${tags.join('')}</div>`;
+    $('strip').innerHTML = stripSVG(last);
+  }
+  function stripSVG(a) {
+    const rhythm = gameType === 'rhythm', gap = a ? a.gap : 0;
+    const hi = rhythm ? Math.ceil((Math.max(gap, rhythmW) + 4) / 5) * 5 : Math.max(40, Math.ceil((gap + 6) / 10) * 10);
+    const L = 120, W = 640, x = dt => L + dt / hi * (W - L - 12);
+    const AREA = 140, top = 6, axisY = top + AREA + 2, H = axisY + 22;   // 키 개수와 상관없이 높이 고정
+    const lanes = a ? a.offsets.length : 0, laneH = lanes ? AREA / lanes : AREA;
+    const fs = Math.min(12, laneH - 2), mh = Math.min(16, laneH - 3);
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="입력별 도착 시점">`;
+    if (rhythm) {
+      s += `<rect x="${x(0)}" y="${top}" width="${x(rhythmW) - x(0)}" height="${AREA}" fill="var(--win)"/>`;
+      s += `<line x1="${x(rhythmW)}" x2="${x(rhythmW)}" y1="${top}" y2="${top + AREA}" stroke="var(--ok)" stroke-dasharray="3 3"/>`;
+    } else {
+      for (let f = 0, i = 0; f < hi; f += FRAME, i++)
+        if (i % 2 === 0) s += `<rect x="${x(f)}" y="${top}" width="${x(Math.min(f + FRAME, hi)) - x(f)}" height="${AREA}" fill="var(--band)"/>`;
+    }
+    if (a) a.offsets.forEach((o, i) => {
+      const y = top + i * laneH + laneH / 2, c = COLORS[i % COLORS.length];
+      s += `<text x="0" y="${y + fs / 3}" font-size="${fs}" font-family="var(--display)" font-weight="600" fill="${c}">${esc(labelOf(o.id))}</text>`;
+      s += `<line x1="${L}" x2="${W - 12}" y1="${y}" y2="${y}" stroke="var(--line)"/>`;
+      s += `<rect x="${x(o.dt) - 3}" y="${y - mh / 2}" width="6" height="${mh}" rx="2" fill="${c}"/>`;
+      if (o.dt > 0) s += `<text x="${x(o.dt) + 7}" y="${y + fs / 3}" font-size="${Math.min(11, fs)}" font-family="var(--display)" fill="var(--muted)">+${f1(o.dt)}</text>`;
+    });
+    const step = hi > 90 ? 10 : 5;
+    for (let t = 0; t <= hi; t += step) {
+      const big = t % (step * 2) === 0;
+      s += `<line x1="${x(t)}" x2="${x(t)}" y1="${axisY}" y2="${axisY + (big ? 6 : 3)}" stroke="var(--muted)"/>`;
+      if (big) s += `<text x="${x(t)}" y="${axisY + 18}" font-size="10" text-anchor="middle" font-family="var(--display)" fill="var(--muted)">${t}</text>`;
+    }
+    return s + '</svg>';
+  }
+  // 간격 분포: 0~40ms를 1ms 단위로, 40ms 이상은 마지막 칸에. 기준선은 격투 1F, 리듬은 판정 범위
+  function renderHist() {
+    const bins = new Array(41).fill(0);
+    attempts.forEach(a => bins[Math.min(40, Math.floor(a.gap))]++);
+    const max = Math.max(1, ...bins);
+    const limit = gameType === 'fight' ? FRAME : rhythmW;
+    const label = gameType === 'fight' ? '1F (16.7ms)' : `판정 범위 ${f1(limit)}ms`;
+    $('hist').innerHTML = bins.map((c, i) =>
+      `<div class="bar ${i >= limit ? 'out' : ''}" style="height:${c / max * 100}%" title="${i === 40 ? '40ms 이상' : i + '~' + (i + 1) + 'ms'}: ${c}회"></div>`).join('')
+      + (limit <= 41 ? `<div class="thr" style="left:${limit / 41 * 100}%"><span>${label}</span></div>` : '');
+  }
+  function renderStats() {
+    const s = stats();
+    const GOAL = 30, n = attempts.length;
+    $('progBar').style.width = Math.min(100, n / GOAL * 100) + '%';
+    $('progBar').classList.toggle('done', n >= GOAL);
+    $('progText').textContent = n >= GOAL ? `${n}회 측정 · 통계가 안정적인 구간입니다.` : `${GOAL}회 중 ${n}회 · ${GOAL - n}회 더 측정하면 통계가 안정됩니다.`;
+    $('undoBtn').disabled = !n;
+    renderMini(s, n, GOAL);
+    if (!s.n) { $('stats').innerHTML = ''; return; }
+    const head = gameType === 'fight'
+      ? `<div class="key"><dt>같은 프레임 확률 (평균)</dt><dd>${pctv(s.frameP)}</dd></div>
+         <div><dt>기록</dt><dd>${s.n} <small>회</small></dd></div>`
+      : `<div class="key"><dt>평균 남은 여유 (판정 ±${f1(rhythmW)}ms)</dt><dd>${f1(s.marginAvg)} <small>ms</small></dd></div>
+         <div><dt>기록</dt><dd>${s.n} <small>회</small></dd></div>
+         <div><dt>가장 적게 남은 여유</dt><dd>${s.marginMin >= 0 ? f1(s.marginMin) : '판정 밖'} <small>${s.marginMin >= 0 ? 'ms' : ''}</small></dd></div>
+         <div><dt>모두 판정 안</dt><dd>${pct(s.within, s.n)} <small>${s.within}/${s.n}</small></dd></div>`;
+    $('stats').innerHTML = head + `
+      <div><dt>평균 간격</dt><dd>${f1(s.mean)} <small>ms</small></dd></div>
+      <div><dt>중앙값</dt><dd>${f1(s.median)} <small>ms</small></dd></div>
+      <div><dt>표준편차</dt><dd>${f1(s.sd)} <small>ms</small></dd></div>
+      <div><dt>최소 / 최대</dt><dd>${f1(s.min)} / ${f1(s.max)}</dd></div>
+      <div><dt>같은 타이밍 (0ms)</dt><dd>${pct(s.zero, s.n)}</dd></div>
+      <div><dt>평균 (프레임)</dt><dd>${(s.mean / FRAME).toFixed(2)} <small>F</small></dd></div>
+      <div class="wide"><dt>개수별 평균 간격</dt><dd>${byCountText(s)}</dd></div>
+      <div class="wide"><dt>추정 보고 간격</dt><dd>${pollText(s.poll)}</dd></div>
+      ${s.approx ? '<div class="wide"><dt>주의</dt><dd style="font-family:var(--body);font-weight:400;font-size:.9rem">Gamepad API로 들어온 기록이 섞여 있어 분포가 실제보다 넓게 나옵니다.</dd></div>' : ''}`;
+  }
+  // 마지막 입력 박스 아래 요약: 스크롤하지 않아도 핵심 통계를 볼 수 있게
+  function renderMini(s, n, goal) {
+    const has = s.n > 0, dash = '–';
+    const judge = gameType === 'fight'
+      ? ['같은 프레임 확률', has ? pctv(s.frameP) : dash]
+      : ['평균 남은 여유', has ? `${f1(s.marginAvg)}<small>ms</small>` : dash];
+    const cells = [
+      ['기록', n >= goal ? `${n}<small>회</small>` : `${n}<small> / ${goal}회</small>`],
+      judge,
+      ['평균 간격', has ? `${f1(s.mean)}<small>ms</small>` : dash],
+      ['최대', has ? `${f1(s.max)}<small>ms</small>` : dash]
+    ];
+    $('mini').innerHTML = cells.map(([t, v]) => `<div><dt>${t}</dt><dd>${v}</dd></div>`).join('');
+  }
+  function renderRecent() {
+    const rows = attempts.map((a, i) => ({ a, i })).slice(-12).reverse();
+    $('recent').innerHTML = rows.length ? rows.map(({ a, i }) =>
+      `<li><span class="n">#${i + 1}</span><span class="g" style="color:${isGood(a.gap) ? 'var(--ok)' : 'var(--bad)'}">${f1(a.gap)}ms</span><span class="k">${a.count}키</span><span class="seq">${a.offsets.map(o => `<i>${esc(labelOf(o.id))}</i>`).join('')}</span></li>`).join('')
+      : '<li style="display:block;border:0" class="empty">기록이 없습니다.</li>';
+  }
+  function renderAll(flash) { renderReadout(flash); renderHist(); renderStats(); renderRecent(); renderCompare(); }
+
+  function summaryText() {
+    const s = stats();
+    if (!s.n) return '측정 기록이 없습니다.';
+    const src = sourceText(attempts);
+    const judge = gameType === 'fight'
+      ? `같은 프레임 확률(평균): ${pctv(s.frameP)}`
+      : `판정 ±${f1(rhythmW)}ms 기준 평균 남은 여유 ${f1(s.marginAvg)}ms, 모두 판정 안 ${pct(s.within, s.n)}`;
+    return [
+      `Chord Timing Tester Ver.1.0.0-beta.1 결과${src ? ' (' + src + ')' : ''}`,
+      `기록 ${s.n}회`,
+      judge,
+      `평균 간격 ${f1(s.mean)}ms, 중앙값 ${f1(s.median)}ms, 표준편차 ${f1(s.sd)}ms`,
+      `최소 ${f1(s.min)}ms, 최대 ${f1(s.max)}ms`,
+      `개수별 평균 간격: ${byCountText(s)}`,
+      `같은 타이밍(0ms) ${pct(s.zero, s.n)}`,
+      `추정 보고 간격: ${pollText(s.poll)}`
+    ].join('\n');
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+  // ---------- 시작 ----------
+  load();
+  loadSessions();
+  $('gpApi').checked = useGamepadApi;
+  if (!hidSupported) hidMsg('이 브라우저는 컨트롤러 연결(WebHID)을 지원하지 않습니다. Chrome이나 Edge로 열어 주세요.');
+  renderType(); renderHeld(); renderDevices(); renderSaveName(); renderAll(false);
+  if (!document.hasFocus()) $('focusBanner').classList.add('show');
+})();
+
+</script>
+</body>
+</html>
