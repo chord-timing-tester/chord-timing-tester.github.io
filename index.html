@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Chord Timing Tester (동시치기 측정기) Ver.1.0.0-beta.2
+  Chord Timing Tester (동시치기 측정기) Ver.1.0.0-beta.3
   ==================================================
   여러 버튼을 동시에 눌렀을 때 첫 입력과 마지막 입력의 간격(ms)을 측정하는 단일 HTML 도구.
   외부 서버나 빌드 과정 없이 이 파일 하나로 동작한다. (Google Fonts만 외부에서 불러오며, 없으면 기본 글꼴 사용)
@@ -19,6 +19,7 @@
     주소: https://chord-timing-tester.github.io
 
   [변경 이력]
+  - 1.0.0-beta.3: 판정 기준을 리듬 게임 먼저 표시(버튼 순서와 처음 방문 시 기본 선택). 이미 설정을 바꾼 사용자는 저장된 선택 유지.
   - 1.0.0-beta.2: 컨트롤러 선택 창이 뜰 때 포커스 안내가 나타나며 화면 전체가 밀리던 문제 수정
            (안내를 화면 위에 떠 있는 알림으로 바꾸고, 선택 창이 떠 있는 동안은 표시하지 않음).
   - 1.0.0-beta.1: 첫 게시 버전. (작업 중 0.9.1 → 0.10.0으로 부르다가, '1.0 직전의 미완성'이라는 뜻을 담아 베타 표기로 확정)
@@ -89,6 +90,7 @@
     값 길이가 조금씩 달라 단위 위치가 행마다 살짝 어긋나는 아쉬움은 있지만, 오른쪽 정렬보다 낫다고 판단.
     '판정 안'은 % 값과 길이가 비슷해서 용어 유지(성공률 등으로 바꾸지 않기로 함).
     항목별 가장 좋은 값은 굵게 표시. 열 너비는 고정(이름 26%, 삭제 칸 58px, 나머지 균등)이라 저장 결과 유무와 상관없이 같다.
+  - 판정 기준은 리듬 게임이 먼저(버튼 순서·기본값). 격투 게임은 두 번째.
   - 설정(게임 유형, 판정 범위, Gamepad API 사용 여부)은 localStorage 'chordtiming2'에 저장.
   - 아날로그 축: X·Y·Z·Rx·Ry·Rz·슬라이더·다이얼·휠·러더·스로틀·가속·브레이크를 인식.
     연결 후 첫 리포트 값을 쉬는 위치로 삼아 트리거(한쪽 끝)와 스틱(가운데)을 구분.
@@ -280,7 +282,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
 <body>
 <div class="wrap">
   <header>
-    <div class="brand"><h1>Chord Timing Tester</h1><span class="ko">동시치기 측정기</span><span class="ver">Ver.1.0.0-beta.2</span></div>
+    <div class="brand"><h1>Chord Timing Tester</h1><span class="ko">동시치기 측정기</span><span class="ver">Ver.1.0.0-beta.3</span></div>
     <p>여러 버튼을 동시에 눌렀을 때 첫 입력과 마지막 입력이 얼마나 차이 나게 들어오는지 잽니다.<br>키보드는 바로, 게임패드·아케이드 스틱·올버튼 컨트롤러는 HID로 연결해서 정밀하게 측정합니다.</p>
   </header>
 
@@ -318,12 +320,12 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
       <section>
         <h2>판정 기준</h2>
         <div class="seg" role="group" aria-label="게임 유형">
-          <button id="typeFight">격투 게임</button><button id="typeRhythm">리듬 게임</button>
+          <button id="typeRhythm">리듬 게임</button><button id="typeFight">격투 게임</button>
         </div>
-        <div id="fightBox" class="field">
+        <div id="fightBox" class="field" hidden>
           <span class="hint" style="margin:0">격투 게임은 입력을 매 프레임(60fps 기준 16.7ms) 한 번씩 읽습니다. 두 입력 사이에 프레임 경계가 끼면 따로 들어간 것으로 처리되므로, 간격을 기준으로 <b>같은 프레임에 들어갈 확률</b>을 계산합니다. 간격 8ms면 약 52%, 2ms면 약 88%입니다.</span>
         </div>
-        <div id="rhythmBox" class="field" hidden>
+        <div id="rhythmBox" class="field">
           <div class="row" style="gap:6px">
             <label for="judgeW">판정 범위 (노트 기준 ±ms)</label>
             <span class="tip" aria-label="알려진 게임의 판정 범위">?
@@ -407,7 +409,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
   const HAT = ['u','ur','r','dr','d','dl','l','ul'];
   const $ = id => document.getElementById(id);
 
-  let gameType = 'fight', rhythmW = 22, useGamepadApi = false;
+  let gameType = 'rhythm', rhythmW = 22, useGamepadApi = false;
   let active = null;
   const attempts = [], held = new Map(), labels = {};
   const padPrev = {}, hidDevs = [];
@@ -996,7 +998,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
       ? `같은 프레임 확률(평균): ${pctv(s.frameP)}`
       : `판정 ±${f1(rhythmW)}ms 기준 평균 남은 여유 ${f1(s.marginAvg)}ms, 모두 판정 안 ${pct(s.within, s.n)}`;
     return [
-      `Chord Timing Tester Ver.1.0.0-beta.2 결과${src ? ' (' + src + ')' : ''}`,
+      `Chord Timing Tester Ver.1.0.0-beta.3 결과${src ? ' (' + src + ')' : ''}`,
       `기록 ${s.n}회`,
       judge,
       `평균 간격 ${f1(s.mean)}ms, 중앙값 ${f1(s.median)}ms, 표준편차 ${f1(s.sd)}ms`,
