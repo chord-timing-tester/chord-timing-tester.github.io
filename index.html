@@ -1,12 +1,13 @@
 <!doctype html>
 <!--
-  Chord Timing Tester (동시치기 측정기) Ver.1.0.0-beta.4
+  Chord Timing Tester (동시치기 측정기) Ver.1.0.0-beta.5
   ==================================================
   여러 버튼을 동시에 눌렀을 때 첫 입력과 마지막 입력의 간격(ms)을 측정하는 단일 HTML 도구.
   외부 서버나 빌드 과정 없이 이 파일 하나로 동작한다. (Google Fonts만 외부에서 불러오며, 없으면 기본 글꼴 사용)
 
   [파일 이름]
-  - chord-timing-tester.html (웹 관례대로 소문자+하이픈. 예전 작업용 이름 chord-timing-lab.html에서 변경)
+  - index.html 한 파일로만 관리(GitHub Pages에 그대로 올리는 이름).
+    예전에는 chord-timing-tester.html(원본)과 index.html(업로드용)을 따로 받았으나 내용이 같아 index.html 하나로 통일.
 
   [버전 규칙]
   - 유의적 버전(주.부.수). 호환 안 되는 큰 변화=주, 새 기능=부, 버그 수정·문구 다듬기=수.
@@ -19,6 +20,10 @@
     주소: https://chord-timing-tester.github.io
 
   [변경 이력]
+  - 1.0.0-beta.5: 화면 테마 버튼 추가(자동·밝게·어둡게). 자동은 기기 설정을 따름. 선택은 설정과 함께 저장되고,
+           페이지를 열 때 저장된 테마를 먼저 적용해 밝은 화면이 잠깐 비치지 않게 함.
+           테마 버튼 너비를 가장 긴 글씨(어둡게)에 맞춰 세 개 모두 같게 함.
+           붙어 있는 버튼에 마우스를 올리면 오른쪽 테두리 강조가 옆 버튼에 가려 잘리던 문제 수정(판정 기준 버튼에도 적용).
   - 1.0.0-beta.4: 파비콘 추가(즐겨찾기·탭 아이콘). 두 레인의 마커가 어긋난 모양, 파일 안에 SVG로 포함.
   - 1.0.0-beta.3: 판정 기준을 리듬 게임 먼저 표시(버튼 순서와 처음 방문 시 기본 선택). 이미 설정을 바꾼 사용자는 저장된 선택 유지.
   - 1.0.0-beta.2: 컨트롤러 선택 창이 뜰 때 포커스 안내가 나타나며 화면 전체가 밀리던 문제 수정
@@ -92,7 +97,13 @@
     '판정 안'은 % 값과 길이가 비슷해서 용어 유지(성공률 등으로 바꾸지 않기로 함).
     항목별 가장 좋은 값은 굵게 표시. 열 너비는 고정(이름 26%, 삭제 칸 58px, 나머지 균등)이라 저장 결과 유무와 상관없이 같다.
   - 판정 기준은 리듬 게임이 먼저(버튼 순서·기본값). 격투 게임은 두 번째.
-  - 설정(게임 유형, 판정 범위, Gamepad API 사용 여부)은 localStorage 'chordtiming2'에 저장.
+  - 설정(게임 유형, 판정 범위, Gamepad API 사용 여부, 화면 테마)은 localStorage 'chordtiming2'에 저장.
+  - 화면 테마: 제목 줄 오른쪽의 자동·밝게·어둡게 버튼. 자동은 data-theme을 지우고 기기 설정(prefers-color-scheme)을 따름.
+    밝게·어둡게는 <html data-theme>으로 고정. 저장 키는 그대로 두고 chordtiming2 안에 theme 값만 추가.
+    head의 짧은 스크립트가 CSS보다 먼저 저장된 테마를 적용해서 첫 화면이 깜빡이지 않게 한다.
+    버튼 묶음은 줄바꿈하지 않고 크기가 고정이라, 선택을 바꿔도 제목 줄 배치가 움직이지 않는다.
+    세 버튼은 균등 칸(가장 긴 글씨 기준)으로 너비를 맞춘다.
+  - 붙어 있는 버튼 묶음(.seg)은 테두리를 1px 겹치므로, 눌린 버튼·마우스를 올린 버튼을 위로 올려 테두리가 잘리지 않게 한다.
   - 아날로그 축: X·Y·Z·Rx·Ry·Rz·슬라이더·다이얼·휠·러더·스로틀·가속·브레이크를 인식.
     연결 후 첫 리포트 값을 쉬는 위치로 삼아 트리거(한쪽 끝)와 스틱(가운데)을 구분.
     50% 이상에서 눌림, 40% 아래에서 뗌(떨림 방지). 디스크립터 최대값이 음수로 읽히면 0~2^비트수-1로 보정.
@@ -126,6 +137,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 저장된 화면 테마를 CSS보다 먼저 적용해서, 어둡게를 고른 사용자에게 밝은 화면이 잠깐 비치지 않게 한다 -->
+<script>try{var t=(JSON.parse(localStorage.getItem('chordtiming2')||'null')||{}).theme;if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <title>Chord Timing Tester · 동시치기 측정기</title>
 <!-- 파비콘: 두 레인 위의 마커가 살짝 어긋난 모양(동시치기 간격). 외부 파일 없이 SVG를 주소에 직접 넣음 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2318202F'/%3E%3Cpath d='M5 11h22M5 21h22' stroke='%235B6680' stroke-width='1.5'/%3E%3Crect x='9' y='6' width='4' height='10' rx='1.5' fill='%236E9DFF'/%3E%3Crect x='17' y='16' width='4' height='10' rx='1.5' fill='%23FF6E9C'/%3E%3C/svg%3E">
@@ -164,6 +177,12 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55}
 .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 48px}
 header{margin-bottom:22px}
+/* 제목 줄: 왼쪽 제목, 오른쪽 테마 버튼. 테마 버튼은 줄어들거나 줄바꿈되지 않아 선택을 바꿔도 배치가 그대로다 */
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.top .brand{min-width:0}
+/* 세 버튼을 같은 너비로: 가장 긴 글씨에 맞춘 균등 칸 */
+.seg.theme{display:inline-grid;grid-template-columns:repeat(3,1fr);flex-shrink:0;margin-top:4px}
+.seg.theme button{text-align:center;white-space:nowrap}
 .brand{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
 h1{font-family:var(--display);font-weight:700;font-size:clamp(1.7rem,4vw,2.4rem);letter-spacing:-.01em;margin:0;line-height:1.1}
 .ver{font-family:var(--display);font-size:.8rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
@@ -187,6 +206,9 @@ input[type=number]{font:inherit;font-family:var(--display);width:84px;padding:6p
 .seg button{border-radius:0;margin-left:-1px}
 .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
 .seg button:last-child{border-radius:0 6px 6px 0}
+/* 버튼끼리 테두리를 1px 겹쳐 붙이므로, 강조된 버튼을 옆 버튼 위로 올려 테두리가 잘리지 않게 한다 */
+.seg button[aria-pressed="true"]{position:relative;z-index:1}
+.seg button:hover,.seg button:focus-visible{position:relative;z-index:2}
 
 .big{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .num{font-family:var(--display);font-weight:700;font-size:clamp(3.2rem,11vw,5.6rem);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -285,7 +307,12 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
 <body>
 <div class="wrap">
   <header>
-    <div class="brand"><h1>Chord Timing Tester</h1><span class="ko">동시치기 측정기</span><span class="ver">Ver.1.0.0-beta.4</span></div>
+    <div class="top">
+      <div class="brand"><h1>Chord Timing Tester</h1><span class="ko">동시치기 측정기</span><span class="ver">Ver.1.0.0-beta.5</span></div>
+      <div class="seg theme" role="group" aria-label="화면 테마">
+        <button class="small" id="themeAuto" title="기기 설정을 따릅니다">자동</button><button class="small" id="themeLight">밝게</button><button class="small" id="themeDark">어둡게</button>
+      </div>
+    </div>
     <p>여러 버튼을 동시에 눌렀을 때 첫 입력과 마지막 입력이 얼마나 차이 나게 들어오는지 잽니다.<br>키보드는 바로, 게임패드·아케이드 스틱·올버튼 컨트롤러는 HID로 연결해서 정밀하게 측정합니다.</p>
   </header>
 
@@ -412,7 +439,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
   const HAT = ['u','ur','r','dr','d','dl','l','ul'];
   const $ = id => document.getElementById(id);
 
-  let gameType = 'rhythm', rhythmW = 22, useGamepadApi = false;
+  let gameType = 'rhythm', rhythmW = 22, useGamepadApi = false, theme = 'auto';
   let active = null;
   const attempts = [], held = new Map(), labels = {};
   const padPrev = {}, hidDevs = [];
@@ -425,7 +452,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
 
   // ---------- 저장 ----------
   function save() {
-    try { localStorage.setItem('chordtiming2', JSON.stringify({ gameType, rhythmW, useGamepadApi })); } catch (e) {}
+    try { localStorage.setItem('chordtiming2', JSON.stringify({ gameType, rhythmW, useGamepadApi, theme })); } catch (e) {}
   }
   function load() {
     try {
@@ -434,6 +461,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
       if (s.gameType === 'fight' || s.gameType === 'rhythm') gameType = s.gameType;
       if (s.rhythmW > 0) rhythmW = s.rhythmW;
       useGamepadApi = !!s.useGamepadApi;
+      if (s.theme === 'light' || s.theme === 'dark') theme = s.theme;
     } catch (e) {}
   }
 
@@ -704,6 +732,17 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
     const v = parseFloat(e.target.value);
     if (v > 0) { rhythmW = v; save(); renderType(); renderAll(false); } else e.target.value = rhythmW.toFixed(1);
   });
+
+  // ---------- 화면 테마 ----------
+  // 자동은 data-theme을 지워 기기 설정을 따르고, 밝게·어둡게는 data-theme으로 고정한다
+  const THEME_BTNS = { auto: 'themeAuto', light: 'themeLight', dark: 'themeDark' };
+  function applyTheme() {
+    if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', theme);
+    for (const [t, id] of Object.entries(THEME_BTNS)) $(id).setAttribute('aria-pressed', theme === t);
+  }
+  function setTheme(t) { theme = t; save(); applyTheme(); }
+  for (const [t, id] of Object.entries(THEME_BTNS)) $(id).addEventListener('click', () => setTheme(t));
 
   $('resetBtn').addEventListener('click', () => { attempts.length = 0; renderAll(false); });
   $('undoBtn').addEventListener('click', () => { if (attempts.length) { attempts.pop(); renderAll(false); } });
@@ -1001,7 +1040,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
       ? `같은 프레임 확률(평균): ${pctv(s.frameP)}`
       : `판정 ±${f1(rhythmW)}ms 기준 평균 남은 여유 ${f1(s.marginAvg)}ms, 모두 판정 안 ${pct(s.within, s.n)}`;
     return [
-      `Chord Timing Tester Ver.1.0.0-beta.4 결과${src ? ' (' + src + ')' : ''}`,
+      `Chord Timing Tester Ver.1.0.0-beta.5 결과${src ? ' (' + src + ')' : ''}`,
       `기록 ${s.n}회`,
       judge,
       `평균 간격 ${f1(s.mean)}ms, 중앙값 ${f1(s.median)}ms, 표준편차 ${f1(s.sd)}ms`,
@@ -1018,7 +1057,7 @@ ol.recent .k{color:var(--muted);font-family:var(--display)}
   loadSessions();
   $('gpApi').checked = useGamepadApi;
   if (!hidSupported) hidMsg('이 브라우저는 컨트롤러 연결(WebHID)을 지원하지 않습니다. Chrome이나 Edge로 열어 주세요.');
-  renderType(); renderHeld(); renderDevices(); renderSaveName(); renderAll(false);
+  applyTheme(); renderType(); renderHeld(); renderDevices(); renderSaveName(); renderAll(false);
   if (!document.hasFocus()) $('focusBanner').classList.add('show');
 })();
 
